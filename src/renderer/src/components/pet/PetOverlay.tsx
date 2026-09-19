@@ -316,6 +316,7 @@ export function PetOverlay(): React.JSX.Element {
   const reducedMotion = usePrefersReducedMotion()
   const { url, sprite, detected } = usePetUrl()
   const size = useAppStore((s) => s.petSize)
+  const sleepyModeActive = useAppStore((s) => s.sleepyModeActive)
 
   const [positionState, setPositionState] = useState<{
     size: number
@@ -385,7 +386,11 @@ export function PetOverlay(): React.JSX.Element {
     // content, so the grab/drag hit area hugs the pet, not the full square box.
     <div
       aria-hidden
-      className="pointer-events-none fixed z-40"
+      // Why: Sleepy Mode covers the app at z-50; the pet rises above it so the resting
+      // screen keeps the one element that shows what the fleet is doing.
+      className={
+        sleepyModeActive ? 'pointer-events-none fixed z-[60]' : 'pointer-events-none fixed z-40'
+      }
       style={{
         left: position.x,
         top: position.y,
