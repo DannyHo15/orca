@@ -12,6 +12,10 @@ type SleepyStoreState = {
   settings: { sleepyModeIdleMinutes: number }
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
   agentStatusEpoch: number
+  retainedAgentsByPaneKey: Record<string, unknown>
+  petVisible: boolean
+  petId: string
+  customPets: never[]
 }
 
 const storeMocks = vi.hoisted(() => ({
@@ -20,7 +24,11 @@ const storeMocks = vi.hoisted(() => ({
     setSleepyModeActive: vi.fn(),
     settings: { sleepyModeIdleMinutes: 0 },
     agentStatusByPaneKey: {},
-    agentStatusEpoch: 0
+    agentStatusEpoch: 0,
+    retainedAgentsByPaneKey: {},
+    petVisible: true,
+    petId: 'claude-the-mage',
+    customPets: []
   }
 }))
 

@@ -7,6 +7,12 @@ import {
   normalizeSleepyModeIdleMinutes,
   sleepyModeIdleDelayMs
 } from '../../../../shared/sleepy-mode-settings'
+import {
+  PET_BOB_KEYFRAMES_CSS,
+  PetSprite,
+  useDocumentVisible,
+  usePetAnimationName
+} from '../pet/PetSprite'
 import { useAppStore } from '../../store'
 import { summarizeSleepyModeFleet } from './sleepy-mode-fleet-summary'
 import { useSleepyModeIdleTrigger } from './use-sleepy-mode-idle-trigger'
@@ -84,6 +90,37 @@ function FleetLine(): React.JSX.Element {
   )
 }
 
+const SCENE_PET_SIZE = 260
+
+/** The pet, centred and idle-bobbing, animating off the same live agent state the corner overlay reads. */
+function ScenePet(): React.JSX.Element | null {
+  const documentVisible = useDocumentVisible()
+  const reducedMotion = usePrefersReducedMotion()
+  // Why: not gated on experimentalPet — that flag owns the draggable corner overlay, not the
+  // artwork. An explicit "Hide pet" is a preference about the pet itself, so the scene honours it.
+  const petHidden = useAppStore((s) => s.petVisible === false)
+  const animationName = usePetAnimationName(false, null, false)
+  const animate = documentVisible && !reducedMotion
+
+  if (petHidden) {
+    return null
+  }
+
+  return (
+    <div aria-hidden className="flex items-end justify-center" style={{ height: SCENE_PET_SIZE }}>
+      <style>{PET_BOB_KEYFRAMES_CSS}</style>
+      <div
+        style={{
+          animation: 'pet-bob 1.2s ease-in-out infinite',
+          animationPlayState: animate ? 'running' : 'paused'
+        }}
+      >
+        <PetSprite size={SCENE_PET_SIZE} animate={animate} animationName={animationName} />
+      </div>
+    </div>
+  )
+}
+
 /**
  * A full-window resting screen for a fleet left running. It covers the workspace (and whatever
  * the agents have on screen) with a clock and a live fleet summary, and gets out of the way on
@@ -136,6 +173,7 @@ export default function SleepyModeOverlay(): React.JSX.Element | null {
       aria-label={translate('auto.components.sleepy-mode.SleepyModeOverlay.label', 'Sleepy Mode')}
       className="sleepy-mode-scene fixed inset-0 z-[95] flex flex-col items-center justify-center gap-3"
     >
+      <ScenePet />
       <p className="text-7xl font-light tabular-nums tracking-tight text-foreground">
         {timeFormat.format(now)}
       </p>
