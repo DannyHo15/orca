@@ -6,6 +6,11 @@ test('Sleepy Mode covers the window from the status bar and wakes on a keypress'
 }) => {
   await waitForSessionReady(orcaPage)
 
+  const beforePath = process.env.ORCA_SLEEPY_MODE_BEFORE_PROOF_PATH
+  if (beforePath) {
+    await orcaPage.screenshot({ path: beforePath })
+  }
+
   const awakeStatus = orcaPage.getByRole('button', { name: /^Keep computer awake/ })
   await expect(awakeStatus).toBeVisible()
   await awakeStatus.click()
