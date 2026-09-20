@@ -141,15 +141,20 @@ describe('SleepyModeOverlay', () => {
 
   it('swallows the wake key so it never reaches the workspace underneath', () => {
     setState({ sleepyModeActive: true })
-    const reachedWorkspace = vi.fn()
-    document.addEventListener('keydown', reachedWorkspace)
     render(<SleepyModeOverlay />)
 
+    // Why dispatch at a real element: an event dispatched on `window` never travels through the
+    // workspace, so a listener below it could not fire either way and the assertion would be empty.
+    const workspace = document.createElement('input')
+    document.body.append(workspace)
+    const reachedWorkspace = vi.fn()
+    workspace.addEventListener('keydown', reachedWorkspace)
+
     const event = new KeyboardEvent('keydown', { key: 'Enter', cancelable: true, bubbles: true })
-    window.dispatchEvent(event)
+    workspace.dispatchEvent(event)
 
     expect(event.defaultPrevented).toBe(true)
     expect(reachedWorkspace).not.toHaveBeenCalled()
-    document.removeEventListener('keydown', reachedWorkspace)
+    workspace.remove()
   })
 })
