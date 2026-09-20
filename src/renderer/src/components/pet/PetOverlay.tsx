@@ -386,10 +386,10 @@ export function PetOverlay(): React.JSX.Element {
     // content, so the grab/drag hit area hugs the pet, not the full square box.
     <div
       aria-hidden
-      // Why: Sleepy Mode covers the app at z-50; the pet rises above it so the resting
+      // Why: Sleepy Mode covers the app at z-[95]; the pet rises above it so the resting
       // screen keeps the one element that shows what the fleet is doing.
       className={
-        sleepyModeActive ? 'pointer-events-none fixed z-[60]' : 'pointer-events-none fixed z-40'
+        sleepyModeActive ? 'pointer-events-none fixed z-[96]' : 'pointer-events-none fixed z-40'
       }
       style={{
         left: position.x,

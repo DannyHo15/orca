@@ -134,7 +134,7 @@ export default function SleepyModeOverlay(): React.JSX.Element | null {
       role="dialog"
       aria-modal="true"
       aria-label={translate('auto.components.sleepy-mode.SleepyModeOverlay.label', 'Sleepy Mode')}
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-background"
+      className="fixed inset-0 z-[95] flex flex-col items-center justify-center gap-3 bg-background"
     >
       <p className="text-7xl font-light tabular-nums tracking-tight text-foreground">
         {timeFormat.format(now)}
