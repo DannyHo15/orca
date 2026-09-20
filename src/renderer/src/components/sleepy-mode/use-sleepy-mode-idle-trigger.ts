@@ -1,12 +1,16 @@
 import { useEffect } from 'react'
 
-/** Input events that count as "the user is still here". Pointer moves are included so a
- *  mouse nudge behaves like every other screensaver. */
-const ACTIVITY_EVENTS = ['keydown', 'pointerdown', 'pointermove', 'wheel', 'touchstart'] as const
+/** How often the OS input clock is sampled. A screensaver may start this late; that is fine. */
+const POLL_MS = 15_000
 
 /**
- * Fires `onIdle` once after `delayMs` without renderer input. Disabled while `delayMs` is 0
+ * Fires `onIdle` once the OS reports `delayMs` without input. Disabled while `delayMs` is 0
  * (auto-start off) or `suspended` (the scene is already up).
+ *
+ * Why the OS clock rather than renderer events: browser panes are `<webview>`s in their own
+ * process, and xterm and Monaco stop propagation on what they handle, so a listener on the
+ * document misses real work and would cover the window mid-use. An unknown idle time (a
+ * platform that cannot measure it, or a paired web client) never starts the scene.
  */
 export function useSleepyModeIdleTrigger({
   delayMs,
@@ -22,20 +26,21 @@ export function useSleepyModeIdleTrigger({
       return
     }
 
-    // One controller owns every listener, so the cleanup can't miss one.
-    const controller = new AbortController()
-    let timer = window.setTimeout(onIdle, delayMs)
-    const restart = (): void => {
-      window.clearTimeout(timer)
-      timer = window.setTimeout(onIdle, delayMs)
+    let cancelled = false
+    const sample = async (): Promise<void> => {
+      const idleSeconds = await window.api.agentAwake.getSystemIdleSeconds().catch(() => null)
+      if (cancelled || idleSeconds === null) {
+        return
+      }
+      if (idleSeconds * 1_000 >= delayMs) {
+        onIdle()
+      }
     }
 
-    for (const event of ACTIVITY_EVENTS) {
-      window.addEventListener(event, restart, { passive: true, signal: controller.signal })
-    }
+    const timer = window.setInterval(() => void sample(), Math.min(POLL_MS, delayMs))
     return () => {
-      window.clearTimeout(timer)
-      controller.abort()
+      cancelled = true
+      window.clearInterval(timer)
     }
   }, [delayMs, suspended, onIdle])
 }

@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { act } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import SleepyModeOverlay from './SleepyModeOverlay'
@@ -44,6 +43,9 @@ vi.mock('@/lib/agent-status-epoch-clock', () => ({
   getAgentStatusEpochNow: () => 1_000
 }))
 
+/** Seconds the fake OS clock reports; the hook polls this instead of listening for DOM events. */
+let systemIdleSeconds: number | null = 0
+
 function entry(paneKey: string, state: AgentStatusEntry['state']): AgentStatusEntry {
   return { state, prompt: '', updatedAt: 1_000, stateStartedAt: 1_000, paneKey, stateHistory: [] }
 }
@@ -55,11 +57,21 @@ function setState(next: Partial<SleepyStoreState>): void {
 describe('SleepyModeOverlay', () => {
   beforeEach(() => {
     vi.useFakeTimers()
+    systemIdleSeconds = 0
     setState({
       sleepyModeActive: false,
       setSleepyModeActive: vi.fn(),
       settings: { sleepyModeIdleMinutes: 0 },
       agentStatusByPaneKey: {}
+    })
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      writable: true,
+      value: {
+        agentAwake: {
+          getSystemIdleSeconds: vi.fn(async () => systemIdleSeconds)
+        }
+      }
     })
   })
 
@@ -73,40 +85,43 @@ describe('SleepyModeOverlay', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
-  it('starts after the configured idle delay and not before', () => {
+  it('starts once the OS reports the configured idle delay, and not before', async () => {
     setState({ settings: { sleepyModeIdleMinutes: 5 } })
     render(<SleepyModeOverlay />)
 
-    act(() => {
-      vi.advanceTimersByTime(299_000)
-    })
+    systemIdleSeconds = 299
+    await vi.advanceTimersByTimeAsync(30_000)
     expect(storeMocks.state.setSleepyModeActive).not.toHaveBeenCalled()
 
-    act(() => {
-      vi.advanceTimersByTime(1_000)
-    })
+    systemIdleSeconds = 300
+    await vi.advanceTimersByTimeAsync(15_000)
     expect(storeMocks.state.setSleepyModeActive).toHaveBeenCalledWith(true)
   })
 
-  it('does not start when auto-start is off', () => {
+  it('does not start when auto-start is off', async () => {
+    systemIdleSeconds = 10_000
     render(<SleepyModeOverlay />)
-    act(() => {
-      vi.advanceTimersByTime(60 * 60_000)
-    })
+    await vi.advanceTimersByTimeAsync(60 * 60_000)
     expect(storeMocks.state.setSleepyModeActive).not.toHaveBeenCalled()
   })
 
-  it('restarts the countdown on input', () => {
+  it('never starts when the platform cannot report idle time', async () => {
+    setState({ settings: { sleepyModeIdleMinutes: 5 } })
+    systemIdleSeconds = null
+    render(<SleepyModeOverlay />)
+
+    await vi.advanceTimersByTimeAsync(60 * 60_000)
+    expect(storeMocks.state.setSleepyModeActive).not.toHaveBeenCalled()
+  })
+
+  it('keeps waiting while work in a terminal or browser pane keeps the OS clock low', async () => {
     setState({ settings: { sleepyModeIdleMinutes: 5 } })
     render(<SleepyModeOverlay />)
 
-    act(() => {
-      vi.advanceTimersByTime(299_000)
-    })
-    fireEvent.keyDown(window, { key: 'a' })
-    act(() => {
-      vi.advanceTimersByTime(299_000)
-    })
+    for (let minute = 0; minute < 20; minute += 1) {
+      systemIdleSeconds = 4
+      await vi.advanceTimersByTimeAsync(60_000)
+    }
     expect(storeMocks.state.setSleepyModeActive).not.toHaveBeenCalled()
   })
 
@@ -122,5 +137,19 @@ describe('SleepyModeOverlay', () => {
 
     fireEvent.keyDown(window, { key: 'a' })
     expect(storeMocks.state.setSleepyModeActive).toHaveBeenCalledWith(false)
+  })
+
+  it('swallows the wake key so it never reaches the workspace underneath', () => {
+    setState({ sleepyModeActive: true })
+    const reachedWorkspace = vi.fn()
+    document.addEventListener('keydown', reachedWorkspace)
+    render(<SleepyModeOverlay />)
+
+    const event = new KeyboardEvent('keydown', { key: 'Enter', cancelable: true, bubbles: true })
+    window.dispatchEvent(event)
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(reachedWorkspace).not.toHaveBeenCalled()
+    document.removeEventListener('keydown', reachedWorkspace)
   })
 })

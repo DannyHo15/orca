@@ -149,9 +149,15 @@ export default function SleepyModeOverlay(): React.JSX.Element | null {
     if (!active) {
       return
     }
-    const wake = (): void => setActive(false)
+    // Why: consume the wake input. Without this the key that dismisses the scene still
+    // reaches the terminal or editor underneath and types, submits, or fires a shortcut.
+    const wake = (event: Event): void => {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      setActive(false)
+    }
     // Capture phase: xterm and Monaco stop plenty of events before they reach window.
-    const options = { capture: true } as const
+    const options = { capture: true, passive: false } as const
     window.addEventListener('keydown', wake, options)
     window.addEventListener('pointerdown', wake, options)
     window.addEventListener('wheel', wake, options)
