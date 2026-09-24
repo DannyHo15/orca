@@ -139,20 +139,33 @@ describe('SleepyModeOverlay', () => {
     expect(storeMocks.state.setSleepyModeActive).toHaveBeenCalledWith(false)
   })
 
-  it('swallows the wake key so it never reaches the workspace underneath', () => {
+  // Why dispatch at a real element: an event dispatched on `window` never travels through the
+  // workspace, so a listener below it could not fire either way and the assertion would be empty.
+  const wakeEvents: { name: string; build: () => Event }[] = [
+    {
+      name: 'keydown',
+      build: () => new KeyboardEvent('keydown', { key: 'Enter', cancelable: true, bubbles: true })
+    },
+    {
+      name: 'pointerdown',
+      build: () => new MouseEvent('pointerdown', { cancelable: true, bubbles: true })
+    },
+    { name: 'wheel', build: () => new WheelEvent('wheel', { cancelable: true, bubbles: true }) }
+  ]
+
+  it.each(wakeEvents)('wakes on $name and never lets it reach the workspace', ({ name, build }) => {
     setState({ sleepyModeActive: true })
     render(<SleepyModeOverlay />)
 
-    // Why dispatch at a real element: an event dispatched on `window` never travels through the
-    // workspace, so a listener below it could not fire either way and the assertion would be empty.
     const workspace = document.createElement('input')
     document.body.append(workspace)
     const reachedWorkspace = vi.fn()
-    workspace.addEventListener('keydown', reachedWorkspace)
+    workspace.addEventListener(name, reachedWorkspace)
 
-    const event = new KeyboardEvent('keydown', { key: 'Enter', cancelable: true, bubbles: true })
+    const event = build()
     workspace.dispatchEvent(event)
 
+    expect(storeMocks.state.setSleepyModeActive).toHaveBeenCalledWith(false)
     expect(event.defaultPrevented).toBe(true)
     expect(reachedWorkspace).not.toHaveBeenCalled()
     workspace.remove()
