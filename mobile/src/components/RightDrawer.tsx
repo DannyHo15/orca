@@ -1,13 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useState } from 'react'
-import {
-  View,
-  Pressable,
-  StyleSheet,
-  Platform,
-  useWindowDimensions,
-  Keyboard,
-  BackHandler
-} from 'react-native'
+import { View, Pressable, StyleSheet, Platform, useWindowDimensions, Keyboard } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import Animated, {
@@ -20,6 +12,7 @@ import Animated, {
   interpolate,
   Extrapolation
 } from 'react-native-reanimated'
+import { useBackClaim } from '../navigation/use-back-claim'
 import { colors, spacing } from '../theme/mobile-theme'
 // Why: mount-before-commit logic is anchor-agnostic, so the X-axis drawer reuses
 // the exact same gate as BottomDrawer rather than duplicating it.
@@ -107,16 +100,17 @@ function MountedRightDrawer({
     }
   }, [onHidden, visible])
 
-  useEffect(() => {
-    if (!visible) {
-      return
-    }
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      onClose()
-      return true
-    })
-    return () => sub.remove()
-  }, [visible, onClose])
+  // The same seam every session sheet takes: the hardware key natively, and a claim on the shell's
+  // key inside the page. The review screen is this drawer's one caller and C4 serves that route
+  // from the page, so both halves are reachable.
+  useBackClaim(
+    visible
+      ? () => {
+          onClose()
+          return true
+        }
+      : null
+  )
 
   const dismiss = useCallback(() => {
     onClose()
