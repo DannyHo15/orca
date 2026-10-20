@@ -5,10 +5,9 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import { isRuntimeEnvironmentRemovalBlocked } from './runtime-environment-host-details'
-import type { RuntimeHostAccessFailure } from './RuntimeHostAccessForm'
+import type { RuntimeHostAccessFailure } from './RuntimeHostAccessFailureAlert'
 
 type RuntimeEnvironmentMutationActionParams = {
-  environments: PublicKnownRuntimeEnvironment[]
   settings: GlobalSettings
   allowLocalRuntime: boolean
   mountedRef: MutableRefObject<boolean>
@@ -21,7 +20,6 @@ type RuntimeEnvironmentMutationActionParams = {
 }
 
 export function useRuntimeEnvironmentMutationActions({
-  environments,
   settings,
   allowLocalRuntime,
   mountedRef,
@@ -58,22 +56,10 @@ export function useRuntimeEnvironmentMutationActions({
       )
       return
     }
-    const duplicate = environments.find(
-      (environment) => environment.name.trim().toLowerCase() === trimmedName.toLowerCase()
-    )
-    if (duplicate) {
-      toast.error(
-        translate(
-          'auto.components.settings.RuntimeEnvironmentsPane.5ef712f407',
-          'A server named "{{value0}}" already exists.',
-          { value0: duplicate.name }
-        )
-      )
-      return
-    }
     setAddServerFailure(null)
     setIsSaving(true)
     try {
+      // Why main judges a taken name: a code for that same saved server refreshes it instead.
       const result = await window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
         name: trimmedName,
         pairingCode: trimmedPairingCode,
@@ -93,19 +79,29 @@ export function useRuntimeEnvironmentMutationActions({
         environmentId: result.environment.id,
         runtimeStatus: result.runtimeStatus
       })
+      if (result.updatedExisting && mountedRef.current) {
+        toast.success(
+          translate(
+            'auto.components.settings.RuntimeEnvironmentsPane.serverAlreadyPaired',
+            'This server is already paired as {{value0}}; updated its connection.',
+            { value0: result.environment.name }
+          )
+        )
+      }
       if (!allowLocalRuntime) {
         const connected = await connectEnvironment(result.environment)
-        if (!connected) {
+        // Why not a refreshed entry: removing it would drop a server the user had already saved.
+        if (!connected && !result.updatedExisting) {
           await window.api.runtimeEnvironments.remove({ selector: result.environment.id })
           await loadEnvironments()
           return
         }
-      } else {
+      } else if (!result.updatedExisting) {
         if (mountedRef.current) {
           toast.success(
             translate(
               'auto.components.settings.RuntimeEnvironmentsPane.7b5986c8df',
-              'Connected to {{value0}}. Use Advanced > Active Server to make it the default.',
+              'Connected to {{value0}}. To create new projects there by default, choose it under Advanced > Default host for new projects.',
               { value0: result.environment.name }
             )
           )
@@ -143,7 +139,7 @@ export function useRuntimeEnvironmentMutationActions({
           setRemoveError(
             translate(
               'auto.components.settings.RuntimeEnvironmentsPane.removeActiveServerBlocked',
-              'Choose another Active Server in Advanced before removing this server.'
+              'This server is the default host for new projects. Choose another one in Advanced before removing it.'
             )
           )
         }

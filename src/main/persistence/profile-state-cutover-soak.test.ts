@@ -17,6 +17,7 @@ import {
   type ProfileStateStoreFactoryResult
 } from './profile-state/profile-state-store-factory'
 import { profileStateDatabaseFile } from './profile-state/profile-state-database'
+import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 vi.mock('electron', () => ({
   app: {
@@ -80,8 +81,7 @@ function createProfile(profileId: string, theme: string): MigratedProfile {
   const options: ProfileStateStoreFactoryOptions = {
     dataFile,
     databaseFile,
-    profileId,
-    authorityMode: 'sqlite-candidate'
+    profileId
   }
   const first = createProfileStateStore(options)
   expect(first.backend).toBe('sqlite')
@@ -117,7 +117,10 @@ describe('profile-state candidate cutover soak', () => {
     profile.first.store.flushOrThrow()
     expect(readFileSync(profile.options.dataFile)).toEqual(retainedJson)
 
-    const legacyStore = new Store({ dataFile: profile.options.dataFile })
+    const legacyStore = new Store({
+      dataFile: profile.options.dataFile,
+      serializedState: retainedJson.toString('utf8')
+    })
     expect(legacyStore.getSettings().theme).toBe('light')
     expect(legacyStore.getSettings().terminalFontSize).not.toBe(123)
     legacyStore.freezeWrites()
@@ -183,10 +186,13 @@ describe('profile-state candidate cutover soak', () => {
           }
         ]
       })
-      reopened.store.setWorktreeMeta('repo-local::/fixture/local', {
-        comment: `soak-${round}`,
-        linkedPR: 100 + round
-      })
+      reopened.store.setWorktreeMeta(
+        hostWorktreeTarget({ id: 'repo-local::/fixture/local', hostId: 'local' }),
+        {
+          comment: `soak-${round}`,
+          linkedPR: 100 + round
+        }
+      )
       reopened.store.createAutomationRun(currentAutomation, 100 + round, 'manual')
       reopened.store.flushOrThrow()
       reopened.store.freezeWrites()
